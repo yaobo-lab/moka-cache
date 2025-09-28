@@ -78,7 +78,7 @@ where
 {
     let cache = CacheHand.get().ok_or_else(|| anyhow!("cache is null"))?;
     let k = key.into();
-    let b = bincode::encode_to_vec(&value, config::standard().with_little_endian())?;
+    let b = bincode::encode_to_vec(&value, config::standard())?;
     cache.insert(k, (exp, b));
     Ok(())
 }

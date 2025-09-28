@@ -3,11 +3,10 @@ use anyhow::{anyhow, Result};
 use bincode::config;
 pub use bincode::{Decode, Encode};
 pub use moka::notification::RemovalCause;
-use moka::{sync::Cache, Equivalent, Expiry};
+use moka::{sync::Cache, Expiry};
 #[allow(unused_imports)]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    hash::Hash,
     sync::Arc,
     sync::OnceLock,
     time::{Duration, Instant},
@@ -83,13 +82,13 @@ where
     Ok(())
 }
 
-pub fn get<K, V>(key: &K) -> Option<(Expiration, V)>
+pub fn get<K, V>(key: K) -> Option<(Expiration, V)>
 where
-    K: Equivalent<String> + Hash + ?Sized,
+    K: Into<String>,
     V: DeserializeOwned + Decode<()> + Sync + Send,
 {
     if let Some(h) = CacheHand.get() {
-        let v = h.get(key)?;
+        let v = h.get(&key.into())?;
         let c = config::standard();
         let b = bincode::decode_from_slice::<V, _>(v.1.as_ref(), c);
         if let Ok((value, _)) = b {
@@ -104,34 +103,33 @@ where
     None
 }
 
-pub fn get_exp<K>(key: &K) -> Option<Expiration>
+pub fn get_exp<K>(key: K) -> Option<Expiration>
 where
-    K: Equivalent<String> + Hash + ?Sized,
+    K: Into<String>,
 {
-    let value = CacheHand.get().map(|h| h.get(key)).unwrap_or(None);
+    let value = CacheHand.get().map(|h| h.get(&key.into())).unwrap_or(None);
     if let Some(v) = value {
         return Some(v.0);
     }
     None
 }
 
-pub fn remove<K>(key: &K)
+pub fn remove<K>(key: K)
 where
-    K: Equivalent<String> + Hash + ?Sized,
+    K: Into<String>,
 {
+    let k = key.into();
     CacheHand.get().map(|h| {
-        h.invalidate(key);
+        h.invalidate(&k);
     });
 }
 
-pub fn contains_key<K>(key: &K) -> bool
+pub fn contains_key<K>(key: K) -> bool
 where
-    K: Equivalent<String> + Hash + ?Sized,
+    K: Into<String>,
 {
-    CacheHand
-        .get()
-        .map(|h| h.contains_key(key))
-        .unwrap_or(false)
+    let k = key.into();
+    CacheHand.get().map(|h| h.contains_key(&k)).unwrap_or(false)
 }
 
 //每隔10检查缓存是否过期
@@ -142,24 +140,25 @@ pub fn check_exp_interval() {
 }
 
 // 刷新key ttl
-pub fn refresh<K>(key: &K) -> Result<()>
+pub fn refresh<K>(key: K) -> Result<()>
 where
-    K: Equivalent<String> + Hash + std::fmt::Display + ?Sized,
+    K: Into<String>,
 {
-    let value = get(key);
+    let k = key.into();
+    let value = get(&k);
 
     let Some(value) = value else {
-        return Err(anyhow!("key: {} not found", key));
+        return Err(anyhow!("key: {} not found", k));
     };
 
     if value.0 == Expiration::Never {
         return Ok(());
     }
 
-    remove(key);
+    remove(&k);
 
     if let Some(c) = CacheHand.get() {
-        c.insert(key.to_string(), value);
+        c.insert(k, value);
     }
 
     Ok(())

@@ -1,7 +1,7 @@
 #![allow(non_upper_case_globals)]
 use anyhow::{anyhow, Result};
-
-use bincode::{config, Decode, Encode};
+use bincode::config;
+pub use bincode::{Decode, Encode};
 pub use moka::notification::RemovalCause;
 use moka::{sync::Cache, Equivalent, Expiry};
 #[allow(unused_imports)]

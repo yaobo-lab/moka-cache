@@ -1,6 +1,6 @@
 [package]
 name = "moka-cache"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021" 
 description = "Based on Moka K-V Cache Utils"
 authors = ["yaobos@outlook.com"]  

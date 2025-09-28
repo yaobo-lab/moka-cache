@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-cargo add cache
+cargo add moka-cache
 ```
 
 ## Usage

@@ -1,9 +1,9 @@
 [package]
 name = "moka-cache"
 version = "1.0.1"
-edition = "2021"
-authors = ["yaobo"]
-description = ""
+edition = "2021" 
+description = "Based on Moka K-V Cache Utils"
+authors = ["yaobos@outlook.com"]  
 repository = "https://github.com/yaobo-lab/moka-cache.git"
 license = "MIT"
  

@@ -1,0 +1,16 @@
+[package]
+name = "moka-cache"
+version = "1.0.1"
+edition = "2021"
+authors = ["yaobo"]
+description = ""
+repository = "https://github.com/yaobo-lab/moka-cache.git"
+license = "MIT"
+ 
+
+[dependencies]
+moka = { version = "0.12.11", features = ["sync"] }
+anyhow = "1.0.100"
+serde = { version = "1.0.228",features = ["derive"]}
+log = "0.4.28"
+bincode = "2.0.1" 

@@ -88,7 +88,10 @@ where
     V: DeserializeOwned + Decode<()> + Sync + Send,
 {
     if let Some(h) = CacheHand.get() {
-        let v = h.get(&key.into())?;
+        let k = key.into();
+
+        let v = h.get(&k)?;
+
         let c = config::standard();
         let b = bincode::decode_from_slice::<V, _>(v.1.as_ref(), c);
         if let Ok((value, _)) = b {
@@ -144,24 +147,25 @@ pub fn refresh<K>(key: K) -> Result<()>
 where
     K: Into<String>,
 {
-    let k = key.into();
-    let value = get(&k);
+    if let Some(h) = CacheHand.get() {
+        let k = key.into();
+        let v = h.get(&k);
+        let Some(v) = v else {
+            return Err(anyhow!("key: {} not found", k));
+        };
 
-    let Some(value) = value else {
-        return Err(anyhow!("key: {} not found", k));
-    };
+        if v.0 == Expiration::Never {
+            return Ok(());
+        }
 
-    if value.0 == Expiration::Never {
+        h.invalidate(&k);
+
+        h.insert(k, v);
+
         return Ok(());
     }
 
-    remove(&k);
-
-    if let Some(c) = CacheHand.get() {
-        c.insert(k, value);
-    }
-
-    Ok(())
+    Err(anyhow!("cache is null"))
 }
 
 #[cfg(test)]
@@ -257,6 +261,19 @@ mod test {
         println!("test_cache_get_byte-->{:?}", v);
     }
 
+    #[test]
+    fn test_cache_get2() {
+        init();
+
+        let key: String = "test_cache_get2".into();
+        //
+        insert(&key, 55, Expiration::Never).unwrap();
+        let v = get::<_, i32>("test_cache_get2");
+        println!("test_cache_get2 str--->: {:?}", v);
+
+        let v = get::<_, i32>(key);
+        println!("test_cache_get2 string--->: {:?}", v);
+    }
     //
     fn test_src_mcache() {
         let expiry = CacheExpiry;
@@ -352,10 +369,11 @@ mod test {
         // println!("get_u64:{:?}", get_u64(&key));
     }
 
-    //
-    fn test_cache_refresh() {
-        let key = "key_u64";
-        //insert_u64("key_u64", 555, Expiration::Second(6));
+    #[test]
+    fn test_cache_expire() {
+        init();
+        let key = "key_i32";
+        insert("key_i32", 555, Expiration::Second(6)).unwrap();
 
         println!("sleep 3s");
         sleep(Duration::from_secs(3));
@@ -363,40 +381,42 @@ mod test {
             return;
         };
         println!("get_exp:{:?}", exp_at);
-        //   println!("get_u64:{:?}", get_u64(&key));
-
-        println!("del:");
-        remove(key);
-
-        // insert_u64(key, 666, exp_at);
-        println!("get_exp:{:?}", get_exp(key));
-        // println!("get_u64:{:?}", get_u64(&key));
+        let v = get::<_, i32>(key);
+        println!("get_i32:{:?}", v);
 
         println!("sleep 3s");
         sleep(Duration::from_secs(2));
         println!("get_exp:{:?}", get_exp(key));
-        //println!("get_u64:{:?}", get_u64(&key));
 
         println!("sleep 5s");
         sleep(Duration::from_secs(2));
-        println!("get_exp:{:?}", get_exp(key));
-        //  println!("get_u64:{:?}", get_u64(&key));
+        let v = get::<_, i32>(key);
+        println!("get_i32:{:?}", v);
     }
 
-    //
-    fn test_cache_refresh2() {
-        let key = "key_u64";
-        //insert_u64(key, 555, Expiration::Second(4));
+    #[test]
+    fn test_cache_refresh() {
+        init();
+        let key = "key_i32".to_string();
+        insert(&key, 555, Expiration::Second(6)).unwrap();
+        let v = get::<_, i32>(&key);
+        println!("get_i32:{:?}", v);
 
-        println!("sleep 2s");
         sleep(Duration::from_secs(2));
+        let Some(exp_at) = get_exp(&key) else {
+            return;
+        };
+        println!("get_exp:{:?}", exp_at);
 
-        println!("refresh: ");
-        refresh(key).expect("refresh error");
+        if let Err(e) = refresh(&key) {
+            println!("refresh error:{:?}", e);
+            return;
+        }
+        println!("refresh get_exp:{:?}", get_exp(&key));
 
-        println!("sleep 5s");
-        sleep(Duration::from_secs(5));
-        println!("get_exp:{:?}", get_exp(key));
-        //  println!("get_u64:{:?}", get_u64(&key));
+        println!("sleep 7s");
+        sleep(Duration::from_secs(7));
+        let v = get::<_, i32>(key);
+        println!("get_i32:{:?}", v);
     }
 }

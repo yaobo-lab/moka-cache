@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "moka-cache"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "anyhow",
  "bincode",

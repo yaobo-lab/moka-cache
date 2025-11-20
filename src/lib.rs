@@ -15,6 +15,7 @@ use std::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Expiration {
     Never,
+    Millis(u64),
     Second(u64),
     Minute(u64),
     Hour(u64),
@@ -24,9 +25,10 @@ impl Expiration {
     pub fn as_duration(&self) -> Option<Duration> {
         match self {
             Expiration::Never => None,
-            Expiration::Second(v) => Some(Duration::from_secs(*v)),
-            Expiration::Minute(v) => Some(Duration::from_secs(*v * 60)),
-            Expiration::Hour(v) => Some(Duration::from_secs(*v * 60 * 60)),
+            Expiration::Millis(v) => Some(Duration::from_millis(v.clone())),
+            Expiration::Second(v) => Some(Duration::from_secs(v.clone())),
+            Expiration::Minute(v) => Some(Duration::from_secs(v.clone() * 60)),
+            Expiration::Hour(v) => Some(Duration::from_secs(v.clone() * 60 * 60)),
         }
     }
 }
@@ -175,7 +177,9 @@ mod test {
     use super::*;
     use std::thread::sleep;
 
-    fn cache_key_expired(_key: Arc<String>, _: CacheData, _case: RemovalCause) {}
+    fn cache_key_expired(key: Arc<String>, value: CacheData, cause: RemovalCause) {
+        println!("过期 key-----> {key}. value--> {value:?}. Cause: {cause:?}");
+    }
     fn init() {
         setup(Some(cache_key_expired), 512).unwrap();
     }
@@ -261,90 +265,6 @@ mod test {
         println!("test_cache_get_byte-->{:?}", v);
     }
 
-    #[test]
-    fn test_cache_get2() {
-        init();
-
-        let key: String = "test_cache_get2".into();
-        //
-        insert(&key, 55, Expiration::Never).unwrap();
-        let v = get::<_, i32>("test_cache_get2");
-        println!("test_cache_get2 str--->: {:?}", v);
-
-        let v = get::<_, i32>(key);
-        println!("test_cache_get2 string--->: {:?}", v);
-    }
-    //
-    fn test_src_mcache() {
-        let expiry = CacheExpiry;
-
-        let eviction_listener = |key, value, cause| {
-            println!("过期 key-----> {key}. value--> {value:?}. Cause: {cause:?}");
-        };
-
-        let cache = Cache::builder()
-            .max_capacity(100)
-            .expire_after(expiry)
-            .eviction_listener(eviction_listener)
-            .build();
-
-        cache.insert("0".to_string(), (Expiration::Second(5), b"a".to_vec()));
-        cache.insert("1".to_string(), (Expiration::Second(6), b"b".to_vec()));
-        cache.insert("2".to_string(), (Expiration::Never, b"c".to_vec()));
-        cache.insert("3".to_string(), (Expiration::Never, b"3333".to_vec()));
-        //update
-        cache.insert(
-            "0".to_string(),
-            (Expiration::Second(10), b"abbbbaa".to_vec()),
-        );
-
-        println!("Entry count: {}", cache.entry_count());
-
-        let Some(v) = cache.get("0") else {
-            println!("cache.get(&0): none");
-            return;
-        };
-        println!("cache.get(&0): {:?}", v);
-
-        println!("0 {}", cache.contains_key("0"));
-        println!("1 {}", cache.contains_key("1"));
-        println!("2 {}", cache.contains_key("2"));
-        println!("3 {}", cache.contains_key("3"));
-
-        let re = cache.remove("3");
-        println!("remove:{:?}", re);
-
-        println!("\n Sleeping for 6 seconds...\n");
-        sleep(Duration::from_secs(6));
-
-        println!("Entry count: {}", cache.entry_count());
-        println!("0 {}", cache.contains_key("0"));
-        println!("1 {}", cache.contains_key("1"));
-        println!("2 {}", cache.contains_key("2"));
-        println!("3 {}", cache.contains_key("3"));
-
-        let Some(v) = cache.get("2") else {
-            return;
-        };
-        println!("cache.get(2): {:?}", v);
-        sleep(Duration::from_secs(6));
-    }
-
-    fn test_cache_evication() {
-        let _ = check_exp_interval();
-        insert("check_evication", "过期了value", Expiration::Second(5)).unwrap();
-        sleep(Duration::from_secs(3));
-        println!("sleep 3s");
-
-        let (_, v) = get::<_, String>("check_evication").unwrap();
-        println!("get_string:{:?}", v);
-        println!("sleep 3s");
-        sleep(Duration::from_secs(3));
-        println!("contains_key:{:?}", contains_key("check_evication"));
-        sleep(Duration::from_secs(3));
-        //println!("get_string:{:?}", get_string("check_evication"));
-    }
-
     //
     fn test_cache_delete() {
         let key = "key_u64";
@@ -392,6 +312,9 @@ mod test {
         sleep(Duration::from_secs(2));
         let v = get::<_, i32>(key);
         println!("get_i32:{:?}", v);
+
+        let c = contains_key(key);
+        println!("contains_key:{:?}", c);
     }
 
     #[test]

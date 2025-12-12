@@ -1,7 +1,6 @@
 #![allow(non_upper_case_globals)]
 use anyhow::{anyhow, Result};
 use bincode::config;
-pub use bincode::{Decode, Encode};
 pub use moka::notification::RemovalCause;
 use moka::{sync::Cache, Expiry};
 #[allow(unused_imports)]
@@ -72,14 +71,26 @@ pub fn setup(
     Ok(())
 }
 
+// pub fn insert<K, V>(key: K, value: V, exp: Expiration) -> Result<()>
+// where
+//     K: Into<String>,
+//     V: Serialize + Encode + Sync + Send,
+// {
+//     let cache = CacheHand.get().ok_or_else(|| anyhow!("cache is null"))?;
+//     let k = key.into();
+//     let b = bincode::encode_to_vec(&value, config::standard())?;
+//     cache.insert(k, (exp, b));
+//     Ok(())
+// }
+
 pub fn insert<K, V>(key: K, value: V, exp: Expiration) -> Result<()>
 where
     K: Into<String>,
-    V: Serialize + Encode + Sync + Send,
+    V: Serialize + Sync + Send,
 {
     let cache = CacheHand.get().ok_or_else(|| anyhow!("cache is null"))?;
     let k = key.into();
-    let b = bincode::encode_to_vec(&value, config::standard())?;
+    let b = bincode::serde::encode_to_vec(&value, config::standard())?;
     cache.insert(k, (exp, b));
     Ok(())
 }
@@ -87,15 +98,13 @@ where
 pub fn get<K, V>(key: K) -> Option<(Expiration, V)>
 where
     K: Into<String>,
-    V: DeserializeOwned + Decode<()> + Sync + Send,
+    V: DeserializeOwned + Sync + Send,
 {
     if let Some(h) = CacheHand.get() {
         let k = key.into();
-
         let v = h.get(&k)?;
-
         let c = config::standard();
-        let b = bincode::decode_from_slice::<V, _>(v.1.as_ref(), c);
+        let b = bincode::serde::decode_from_slice::<V, _>(v.1.as_ref(), c);
         if let Ok((value, _)) = b {
             return Some((v.0, value));
         }
@@ -104,9 +113,32 @@ where
         }
         return None;
     }
-
     None
 }
+
+// pub fn get<K, V>(key: K) -> Option<(Expiration, V)>
+// where
+//     K: Into<String>,
+//     V: DeserializeOwned + Decode<()> + Sync + Send,
+// {
+//     if let Some(h) = CacheHand.get() {
+//         let k = key.into();
+
+//         let v = h.get(&k)?;
+
+//         let c = config::standard();
+//         let b = bincode::decode_from_slice::<V, _>(v.1.as_ref(), c);
+//         if let Ok((value, _)) = b {
+//             return Some((v.0, value));
+//         }
+//         if let Err(e) = b {
+//             log::error!("cache deserialize error: {}", e.to_string());
+//         }
+//         return None;
+//     }
+
+//     None
+// }
 
 pub fn get_exp<K>(key: K) -> Option<Expiration>
 where
@@ -214,7 +246,7 @@ mod test {
 
     #[test]
     fn test_cache_struct() {
-        #[derive(Encode, Decode, Debug, Clone, Serialize, Deserialize)]
+        #[derive(Debug, Clone, Serialize, Deserialize)]
         struct Config {
             pub path: String,
             pub cache_capacity: u32,
@@ -227,6 +259,7 @@ mod test {
             len: 1024,
         };
         insert("test_cache_struct", b, Expiration::Never).unwrap();
+
         let v = get::<_, Config>("test_cache_struct");
         println!("test_cache_struct-->{:?}", v);
     }

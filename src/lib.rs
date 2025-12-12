@@ -116,7 +116,7 @@ where
     None
 }
 
-pub fn convert<V>(d: &[u8]) -> Option<V>
+pub fn deserialize<V>(d: &[u8]) -> Option<V>
 where
     V: DeserializeOwned + Sync + Send,
 {
@@ -126,7 +126,7 @@ where
         return Some(value);
     }
     if let Err(e) = b {
-        log::error!("cache deserialize error: {}", e.to_string());
+        log::error!("deserialize error: {}", e.to_string());
     }
     return None;
 }

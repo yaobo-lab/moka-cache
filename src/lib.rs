@@ -116,6 +116,21 @@ where
     None
 }
 
+pub fn convert<V>(d: &[u8]) -> Option<V>
+where
+    V: DeserializeOwned + Sync + Send,
+{
+    let c = config::standard();
+    let b = bincode::serde::decode_from_slice::<V, _>(d, c);
+    if let Ok((value, _)) = b {
+        return Some(value);
+    }
+    if let Err(e) = b {
+        log::error!("cache deserialize error: {}", e.to_string());
+    }
+    return None;
+}
+
 // pub fn get<K, V>(key: K) -> Option<(Expiration, V)>
 // where
 //     K: Into<String>,

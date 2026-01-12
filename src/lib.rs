@@ -1,4 +1,3 @@
-#![allow(non_upper_case_globals)]
 use anyhow::{anyhow, Result};
 use bincode::config;
 pub use moka::notification::RemovalCause;
@@ -34,8 +33,8 @@ pub type MokaCacheData = (Expiration, Vec<u8>);
 pub struct MokaCache(Cache<String, (Expiration, Vec<u8>)>);
 pub type MokaCacheHandler = Arc<MokaCache>;
 
-pub struct CacheExpiry;
-impl Expiry<String, (Expiration, Vec<u8>)> for CacheExpiry {
+pub struct MokaCacheExpiry;
+impl Expiry<String, (Expiration, Vec<u8>)> for MokaCacheExpiry {
     fn expire_after_create(
         &self,
         _key: &String,
@@ -54,7 +53,7 @@ impl MokaCache {
     ) -> MokaCache {
         let mut c = Cache::builder()
             .max_capacity(max_cap)
-            .expire_after(CacheExpiry {});
+            .expire_after(MokaCacheExpiry {});
         if let Some(callback) = callback {
             c = c.eviction_listener(callback);
         }

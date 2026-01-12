@@ -1,6 +1,6 @@
 [package]
 name = "moka-cache"
-version = "1.0.9"
+version = "1.1.0"
 edition = "2021" 
 description = "Based on Moka K-V Cache Utils"
 authors = ["yaobos@outlook.com"]  
@@ -13,3 +13,7 @@ anyhow = "1.0.100"
 serde = { version = "1.0.228",features = ["derive"]}
 log = "0.4.29"
 bincode ={version = "2.0.1",features = ["serde"]} 
+
+
+[dev-dependencies]  
+toolkit-rs={ version = "1.0.22"}

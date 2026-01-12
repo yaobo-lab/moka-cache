@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use bincode::config;
-pub use moka::notification::RemovalCause;
-use moka::{sync::Cache, Expiry};
+pub use moka;
+use moka::{notification::RemovalCause, sync::Cache, Expiry};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     sync::Arc,
@@ -60,18 +60,6 @@ impl MokaCache {
         MokaCache(c.build())
     }
 
-    // pub fn insert<K, V>(key: K, value: V, exp: Expiration) -> Result<()>
-    // where
-    //     K: Into<String>,
-    //     V: Serialize + Encode + Sync + Send,
-    // {
-    //     let cache = CacheHand.get().ok_or_else(|| anyhow!("cache is null"))?;
-    //     let k = key.into();
-    //     let b = bincode::encode_to_vec(&value, config::standard())?;
-    //     cache.insert(k, (exp, b));
-    //     Ok(())
-    // }
-
     pub fn insert<K, V>(&self, key: K, value: V, exp: Expiration) -> Result<()>
     where
         K: AsRef<str>,
@@ -114,30 +102,6 @@ impl MokaCache {
         }
         return None;
     }
-
-    // pub fn get<K, V>(key: K) -> Option<(Expiration, V)>
-    // where
-    //     K: Into<String>,
-    //     V: DeserializeOwned + Decode<()> + Sync + Send,
-    // {
-    //     if let Some(h) = CacheHand.get() {
-    //         let k = key.into();
-
-    //         let v = h.get(&k)?;
-
-    //         let c = config::standard();
-    //         let b = bincode::decode_from_slice::<V, _>(v.1.as_ref(), c);
-    //         if let Ok((value, _)) = b {
-    //             return Some((v.0, value));
-    //         }
-    //         if let Err(e) = b {
-    //             log::error!("cache deserialize error: {}", e.to_string());
-    //         }
-    //         return None;
-    //     }
-
-    //     None
-    // }
 
     pub fn get_exp<K>(&self, key: K) -> Option<Expiration>
     where
@@ -193,13 +157,72 @@ impl MokaCache {
 mod test {
     use super::*;
     use serde::{Deserialize, Serialize};
-    use std::thread::sleep;
+    use std::process;
+    use std::sync::Mutex;
+    use std::thread::{self, sleep};
+    use toolkit_rs::logger::{self, LogConfig};
 
-    fn cache_key_expired(key: Arc<String>, value: MokaCacheData, cause: RemovalCause) {
-        println!("过期 key-----> {key}. value--> {value:?}. Cause: {cause:?}");
+    static COUNT: Mutex<u32> = Mutex::new(0);
+    fn cache_key_expired(key: Arc<String>, _value: MokaCacheData, cause: RemovalCause) {
+        let mut k = 0;
+        if let Ok(mut c) = COUNT.lock() {
+            *c += 1;
+            k = *c;
+        }
+        k = k - 1;
+        log::debug!("{}. 过期 key-----> {key}. Cause: {cause:?}", k);
+        // if RemovalCause::Expired == cause {
+        //     log::debug!("过期 key-----> {key}. value--> {value:?}. Cause: {cause:?}");
+        // }
     }
     fn new() -> MokaCacheHandler {
+        let lcfg = LogConfig {
+            style: logger::LogStyle::Default,
+            ..LogConfig::default()
+        };
+        logger::setup(lcfg).unwrap_or_else(|e| {
+            println!("log setup err:{}", e);
+            process::exit(1);
+        });
+
         Arc::new(MokaCache::new_default(Some(cache_key_expired), 512))
+    }
+
+    #[test]
+    fn test_cache_callback() {
+        let m = new();
+
+        let key = "key_0001";
+
+        let mclone = m.clone();
+        let mut k = 0;
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(50));
+            mclone.check_exp_interval();
+            k = k + 1;
+            //log::debug!("{}.<---------------- check expire ---------------->", k);
+        });
+
+        for i in 0..10 {
+            thread::sleep(Duration::from_millis(50));
+
+            let c = m.contains_key(key);
+            let g = m.get::<_, u32>(key);
+
+            let mut v = 1;
+            if let Some(k) = g {
+                v = v + k.1;
+            }
+            m.remove(key);
+
+            log::debug!("{}. key exists:{} , get value:{}", i, c, v);
+
+            m.insert(key, v, Expiration::Millis(100)).unwrap();
+        }
+
+        thread::sleep(Duration::from_secs(2));
+        let v = m.get::<_, u32>(key);
+        log::debug!("ok test_cache_get_u1622-->{:?}", v);
     }
 
     #[test]

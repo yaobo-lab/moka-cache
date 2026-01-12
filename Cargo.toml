@@ -1,6 +1,6 @@
 [package]
 name = "moka-cache"
-version = "1.0.8"
+version = "1.0.9"
 edition = "2021" 
 description = "Based on Moka K-V Cache Utils"
 authors = ["yaobos@outlook.com"]  
@@ -8,7 +8,7 @@ repository = "https://github.com/yaobo-lab/moka-cache.git"
 license = "MIT"
 
 [dependencies]
-moka = { version = "0.12.11", features = ["sync"] }
+moka = { version = "0.12.12", features = ["sync"] }
 anyhow = "1.0.100"
 serde = { version = "1.0.228",features = ["derive"]}
 log = "0.4.29"

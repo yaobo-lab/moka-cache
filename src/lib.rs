@@ -30,7 +30,7 @@ impl Expiration {
 }
 
 pub type MokaCacheData = (Expiration, Vec<u8>);
-pub struct MokaCache(Cache<String, (Expiration, Vec<u8>)>);
+pub struct MokaCache(pub Cache<String, (Expiration, Vec<u8>)>);
 pub type MokaCacheHandler = Arc<MokaCache>;
 
 pub struct MokaCacheExpiry;

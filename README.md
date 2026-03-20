@@ -1,190 +1,203 @@
+# moka-cache
+
+`moka-cache` 是一个基于 [`moka`](https://crates.io/crates/moka) 的轻量级 K-V 缓存工具库。
+它对 `moka::sync::Cache` 做了一层简单封装，提供了：
+
+- 统一的过期时间模型 `Expiration`
+- 基于 `serde` + `bincode` 的泛型对象缓存
+- 可选的缓存移除/过期回调
+- 常用缓存操作，如 `insert`、`get`、`remove`、`refresh`
+
+这个 crate 适合需要在 Rust 项目中快速缓存字符串、数字、字节数组或结构体数据的场景。
+
+## Features
+
+- 基于 `moka::sync::Cache`
+- 支持缓存任意实现了 `Serialize` / `DeserializeOwned` 的类型
+- 支持多种 TTL：
+  - `Never`
+  - `Millis(u64)`
+  - `Second(u64)`
+  - `Minute(u64)`
+  - `Hour(u64)`
+- 支持通过回调监听缓存项被移除的原因
+- 提供手动刷新 TTL 的 `refresh`
+
 ## Install
 
 ```bash
 cargo add moka-cache
 ```
 
-## Usage
+## Quick Start
 
 ```rust
-   
-mod test {
-    use super::*;
-    use serde::{Deserialize, Serialize};
-    use std::thread::sleep;
+use moka::notification::RemovalCause;
+use moka_cache::{Expiration, MokaCache, MokaCacheData};
+use std::sync::Arc;
 
-    fn cache_key_expired(key: Arc<String>, value: MokaCacheData, cause: RemovalCause) {
-        println!("过期 key-----> {key}. value--> {value:?}. Cause: {cause:?}");
-    }
-    fn new() -> MokaCacheHandler {
-        Arc::new(MokaCache::new_default(Some(cache_key_expired), 512))
-    }
+fn on_remove(key: Arc<String>, _value: MokaCacheData, cause: RemovalCause) {
+    println!("key={key}, cause={cause:?}");
+}
 
-    #[test]
-    fn test_encode_decode() {
-        let value: i32 = 1000;
-        let config = config::standard().with_little_endian();
-        let b = bincode::encode_to_vec(&value, config).unwrap();
-        println!("b-->{:?}", b);
-        let (value, _) = bincode::decode_from_slice::<i32, _>(b.as_ref(), config).unwrap();
-        println!("value-->{}", value);
-    }
+fn main() -> anyhow::Result<()> {
+    let cache = MokaCache::new_default(Some(on_remove), 512);
 
-    #[test]
-    fn test_cache_u16() {
-        let m = new();
-        m.remove("test_cache_get_u1622");
-        m.insert("test_cache_get_u1622", 1000, Expiration::Never)
-            .unwrap();
-        let v = m.get::<_, u32>("test_cache_get_u1622");
-        println!("test_cache_get_u1622-->{:?}", v);
-    }
+    cache.insert("message", "hello moka", Expiration::Minute(5))?;
 
-    #[test]
-    fn test_cache_byte() {
-        let m = new();
-        let b = b"hello world".to_vec();
-        m.insert("test_cache_get_byte", b, Expiration::Never)
-            .unwrap();
-        let v = m.get::<_, Vec<u8>>("test_cache_get_byte");
-        println!("test_cache_get_byte-->{:?}", v);
-    }
+    let value = cache.get::<_, String>("message");
+    assert_eq!(value, Some((Expiration::Minute(5), "hello moka".to_string())));
 
-    #[test]
-    fn test_cache_struct() {
-        #[derive(Debug, Clone, Serialize, Deserialize)]
-        struct Config {
-            pub path: String,
-            pub cache_capacity: u32,
-            pub len: usize,
-        }
-        let m = new();
-        let b = Config {
-            path: "test".to_string(),
-            cache_capacity: 1024,
-            len: 1024,
-        };
-        m.insert("test_cache_struct", b, Expiration::Never).unwrap();
-
-        let v = m.get::<_, Config>("test_cache_struct");
-        println!("test_cache_struct-->{:?}", v);
-    }
-
-    #[test]
-    fn test_cache_get() {
-        let m = new();
-
-        //
-        m.insert("test_cache_get", "hello world", Expiration::Never)
-            .unwrap();
-        let v = m.get::<_, String>("test_cache_get");
-        println!("test_cache_get--->: {:?}", v);
-
-        //
-        m.insert("test_cache_get_bool", true, Expiration::Never)
-            .unwrap();
-        let v = m.get::<_, bool>("test_cache_get_bool");
-        println!("test_cache_get_bool-->{:?}", v);
-
-        m.insert("test_cache_get_bool_false", false, Expiration::Never)
-            .unwrap();
-        let v = m.get::<_, bool>("test_cache_get_bool_false");
-        println!("test_cache_get_bool_false-->{:?}", v);
-
-        //
-        m.insert("test_cache_get_i32", 1000, Expiration::Never)
-            .unwrap();
-        let v = m.get::<_, i32>("test_cache_get_i32");
-        println!("test_cache_get_i32-->{:?}", v);
-
-        //
-        m.insert(
-            "test_cache_get_byte",
-            b"hello world".to_vec(),
-            Expiration::Never,
-        )
-        .unwrap();
-        let v = m.get::<_, Vec<u8>>("test_cache_get_byte");
-        println!("test_cache_get_byte-->{:?}", v);
-    }
-
-    //
-    fn test_cache_delete() {
-        let m = new();
-        let key = "key_u64";
-        // insert_u64("key_u64", 555, Expiration::Second(6));
-
-        println!("sleep 3s");
-        sleep(Duration::from_secs(3));
-        println!("get_exp:{:?}", m.get_exp(key));
-        //   println!("get_u64:{:?}", get_u64(&key));
-
-        println!("update:");
-        m.remove(key);
-        sleep(Duration::from_secs(1));
-
-        // insert_u64(key.to_string(), 666, Expiration::Second(12));
-        // println!("get_exp:{:?}", get_exp(&key));
-        // println!("get_u64:{:?}", get_u64(&key));
-
-        // println!("sleep 3s");
-        // sleep(Duration::from_secs(3));
-        println!("get_exp:{:?}", m.get_exp(key));
-        // println!("get_u64:{:?}", get_u64(&key));
-    }
-
-    #[test]
-    fn test_cache_expire() {
-        let m = new();
-        let key = "key_i32";
-        m.insert("key_i32", 555, Expiration::Second(6)).unwrap();
-
-        println!("sleep 3s");
-        sleep(Duration::from_secs(3));
-        let Some(exp_at) = m.get_exp(key) else {
-            return;
-        };
-        println!("get_exp:{:?}", exp_at);
-        let v = m.get::<_, i32>(key);
-        println!("get_i32:{:?}", v);
-
-        println!("sleep 3s");
-        sleep(Duration::from_secs(2));
-        println!("get_exp:{:?}", m.get_exp(key));
-
-        println!("sleep 5s");
-        sleep(Duration::from_secs(2));
-        let v = m.get::<_, i32>(key);
-        println!("get_i32:{:?}", v);
-
-        let c = m.contains_key(key);
-        println!("contains_key:{:?}", c);
-    }
-
-    #[test]
-    fn test_cache_refresh() {
-        let m = new();
-        let key = "key_i32".to_string();
-        m.insert(&key, 555, Expiration::Second(6)).unwrap();
-        let v = m.get::<_, i32>(&key);
-        println!("get_i32:{:?}", v);
-
-        sleep(Duration::from_secs(2));
-        let Some(exp_at) = m.get_exp(&key) else {
-            return;
-        };
-        println!("get_exp:{:?}", exp_at);
-
-        if let Err(e) = m.refresh(&key) {
-            println!("refresh error:{:?}", e);
-            return;
-        }
-        println!("refresh get_exp:{:?}", m.get_exp(&key));
-
-        println!("sleep 7s");
-        sleep(Duration::from_secs(7));
-        let v = m.get::<_, i32>(key);
-        println!("get_i32:{:?}", v);
-    }
+    Ok(())
 }
 ```
+
+## Cache Struct Example
+
+```rust
+use moka_cache::{Expiration, MokaCache};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct AppConfig {
+    path: String,
+    cache_capacity: u32,
+}
+
+fn main() -> anyhow::Result<()> {
+    let cache = MokaCache::new_default(None, 128);
+
+    let config = AppConfig {
+        path: "./data".to_string(),
+        cache_capacity: 1024,
+    };
+
+    cache.insert("app-config", config.clone(), Expiration::Never)?;
+
+    let value = cache.get::<_, AppConfig>("app-config");
+    assert_eq!(value, Some((Expiration::Never, config)));
+
+    Ok(())
+}
+```
+
+## API Overview
+
+### Create Cache
+
+```rust
+let cache = MokaCache::new_default(None, 512);
+```
+
+- 第一个参数：可选移除回调
+- 第二个参数：最大容量 `max_capacity`
+
+### Insert Data
+
+```rust
+cache.insert("key", 123_i32, Expiration::Second(30))?;
+```
+
+### Read Data
+
+```rust
+let value = cache.get::<_, i32>("key");
+```
+
+返回值类型：
+
+```rust
+Option<(Expiration, V)>
+```
+
+其中：
+
+- `Expiration` 是写入时设置的过期策略
+- `V` 是反序列化后的实际值
+
+### Remove Data
+
+```rust
+cache.remove("key");
+```
+
+### Check Existence
+
+```rust
+let exists = cache.contains_key("key");
+```
+
+### Get Expiration Policy
+
+```rust
+let exp = cache.get_exp("key");
+```
+
+### Refresh TTL
+
+`refresh` 会按原来的过期策略重新写入当前 key，从而延长生命周期：
+
+```rust
+cache.refresh("key")?;
+```
+
+如果 key 不存在，会返回错误；如果过期策略是 `Expiration::Never`，则不会执行刷新。
+
+## About Expiration Cleanup
+
+当前库基于 `moka::sync::Cache`，并暴露了：
+
+```rust
+cache.check_exp_interval();
+```
+
+这个方法内部会调用 `run_pending_tasks()`，适合在后台线程中定期执行，以便更及时地触发过期清理和回调。例如：
+
+```rust
+use std::{thread, time::Duration};
+
+thread::spawn({
+    let cache = cache_handler.clone();
+    move || loop {
+        thread::sleep(Duration::from_millis(50));
+        cache.check_exp_interval();
+    }
+});
+```
+
+如果你的业务依赖“过期后尽快触发移除回调”，建议显式调度这个方法。
+
+## Supported Value Types
+
+只要类型实现了以下 trait，就可以直接缓存：
+
+- `serde::Serialize`
+- `serde::de::DeserializeOwned`
+
+例如：
+
+- `String`
+- `bool`
+- `i32` / `u32` / `u64`
+- `Vec<u8>`
+- 自定义结构体
+
+## Public Types
+
+项目当前暴露的核心类型包括：
+
+- `MokaCache`
+- `MokaCacheHandler = Arc<MokaCache>`
+- `MokaCacheData = (Expiration, Vec<u8>)`
+- `Expiration`
+
+## Notes
+
+- key 类型统一使用字符串语义，接口接收 `AsRef<str>`
+- value 会以 `bincode` 二进制格式写入缓存
+- 读取时如果反序列化失败，会记录错误日志并返回 `None`
+- `refresh` 的实现是“读取旧值后重新插入”，适合 TTL 续期场景
+
+## License
+
+MIT
